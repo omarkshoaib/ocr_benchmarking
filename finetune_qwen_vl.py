@@ -12,7 +12,7 @@ import os
 from PIL import Image
 
 # --- Configuration ---
-MODEL_ID = "Qwen/Qwen-VL-Chat-Int4" # Use pre-quantized Int4 model
+MODEL_ID = "Qwen/Qwen-VL-Chat" # Revert to original model
 DATASET_PATH = "." # Directory containing train.json and val.json
 OUTPUT_DIR = "./qwen_vl_khatt_finetuned"
 LORA_RANK = 8
@@ -22,9 +22,9 @@ LORA_DROPOUT = 0.05
 LORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"] # Common for LLMs
 
 # Training Arguments (Adjust based on your hardware and needs)
-PER_DEVICE_TRAIN_BATCH_SIZE = 4 # Reduce if OOM errors occur
-PER_DEVICE_EVAL_BATCH_SIZE = 4
-GRADIENT_ACCUMULATION_STEPS = 4 # Increase effective batch size
+PER_DEVICE_TRAIN_BATCH_SIZE = 1 # Reduce drastically for memory
+PER_DEVICE_EVAL_BATCH_SIZE = 1  # Reduce drastically for memory
+GRADIENT_ACCUMULATION_STEPS = 16 # Increase to compensate batch size reduction
 LEARNING_RATE = 1e-4
 NUM_TRAIN_EPOCHS = 1 # Start with 1 epoch, increase if needed
 LOGGING_STEPS = 10
@@ -42,15 +42,19 @@ print(f"Dataset loaded: {raw_datasets}")
 # --- Load Model and Processor ---
 print(f"Loading model and processor: {MODEL_ID}...")
 
-# No explicit BitsAndBytesConfig needed for pre-quantized Int4 model
+# Re-introduce Quantization config for memory efficiency
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
 
 # Load processor (handles text tokenization and image processing)
 processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
 
-# Load pre-quantized Int4 model
-# It should handle device mapping automatically if enough VRAM, otherwise might need manual map
+# Load model with quantization
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
+    quantization_config=quantization_config, # Use 4-bit quantization
     trust_remote_code=True,
     device_map="auto" # Automatically distribute model across available GPUs
 )
