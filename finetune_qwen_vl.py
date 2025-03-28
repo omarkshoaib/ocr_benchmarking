@@ -19,7 +19,7 @@ LORA_RANK = 8
 LORA_ALPHA = 16
 LORA_DROPOUT = 0.05
 # Adjust target modules based on Qwen-VL architecture if needed
-LORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"] # Common for LLMs
+LORA_TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "gate_proj", "up_proj", "down_proj"] # Common for LLMs
 
 # Training Arguments (Adjust based on your hardware and needs)
 PER_DEVICE_TRAIN_BATCH_SIZE = 1 # Reduce drastically for memory
@@ -42,24 +42,27 @@ print(f"Dataset loaded: {raw_datasets}")
 # --- Load Model and Processor ---
 print(f"Loading model and processor: {MODEL_ID}...")
 
+# Re-introduce Quantization config for memory efficiency
+quantization_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
+
 # Load processor (handles text tokenization and image processing)
 processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
-processor.tokenizer.pad_token = processor.tokenizer.eos_token  # Set padding token
+processor.tokenizer.pad_token = processor.tokenizer.eot_token  # Set padding token
 
 # Load model with disk offloading
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
+    quantization_config=quantization_config, # Use 4-bit quantization
     trust_remote_code=True,
-    device_map="auto",
-    offload_folder="./offload",  # Specify directory for offloaded weights
-    use_safetensors=True,        # Use safetensors if available
-    torch_dtype=torch.bfloat16   # Match automatic precision conversion
+    device_map="auto" # Automatically distribute model across available GPUs, No CPU offloading for now
 )
 print("Model and processor loaded.")
 
 # --- Preprocessing Function ---
 def preprocess_data(examples):
-    """Prepares image and text data for Qwen-VL."""
     image_paths = examples['image']
     prompts = examples['prompt']
     transcriptions = examples['transcription']
@@ -72,7 +75,7 @@ def preprocess_data(examples):
             # Load image
             image = Image.open(img_path).convert('RGB')
             batch_images.append(image)
-
+ 
             # Format text input for Qwen-VL Chat (adjust if using a non-chat model)
             # Example format: "<img>path/to/image.jpg</img>\n{prompt}\nAnswer:{transcription}"
             # The processor usually handles the image token insertion based on text structure.
