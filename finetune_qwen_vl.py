@@ -185,7 +185,7 @@ trainer = Trainer(
     train_dataset=tokenized_datasets["train"],
     eval_dataset=tokenized_datasets["validation"],
     processor=processor, # Pass processor for potential use in data collation/saving
-    # Data collator might be needed if padding isn't handled perfectly by map/processor
+    # Data collator might be needed if padding isn't handled perfectly by map/processor NOTE TO SELF 
     # data_collator=DataCollatorForLanguageModeling(tokenizer=processor.tokenizer, mlm=False) # Example
 )
 print("Trainer initialized.")
@@ -203,3 +203,44 @@ processor.save_pretrained(os.path.join(OUTPUT_DIR, "final_adapter"))
 
 print(f"Training complete. Results: {train_result}")
 print(f"Final LoRA adapter saved to: {os.path.join(OUTPUT_DIR, 'final_adapter')}")
+
+# --- Evaluation with CER Metric ---
+print("Running evaluation with CER metric...")
+from datasets import load_metric
+cer_metric = load_metric("cer")
+
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    pred_texts = processor.batch_decode(predictions, skip_special_tokens=True)
+    # Replace -100 in labels as we can't decode them
+    labels = np.where(labels != -100, labels, processor.tokenizer.pad_token_id)
+    label_texts = processor.batch_decode(labels, skip_special_tokens=True)
+    cer = cer_metric.compute(predictions=pred_texts, references=label_texts)
+    return {"cer": cer}
+
+eval_results = trainer.evaluate(compute_metrics=compute_metrics)
+print(f"Evaluation results (CER): {eval_results}")
+
+# --- Inference Function ---
+def transcribe_image(image_path):
+    """Transcribe text from an image using the fine-tuned model"""
+    try:
+        image = Image.open(image_path).convert('RGB')
+        inputs = processor(text="Transcribe the text in this image.\nAnswer:", 
+                         images=[image], 
+                         return_tensors="pt")
+        inputs = {k: v.to(model.device) for k, v in inputs.items()}
+        outputs = model.generate(**inputs, max_new_tokens=100)
+        return processor.decode(outputs[0], skip_special_tokens=True)
+    except Exception as e:
+        print(f"Error transcribing image {image_path}: {e}")
+        return None
+
+# Test inference
+test_image = "khatt_dataset/sample.jpg"  # Replace with actual test image
+if os.path.exists(test_image):
+    print("Testing transcription on sample image...")
+    transcription = transcribe_image(test_image)
+    print(f"Transcription: {transcription}")
+else:
+    print(f"Test image not found at {test_image}")
