@@ -42,21 +42,18 @@ print(f"Dataset loaded: {raw_datasets}")
 # --- Load Model and Processor ---
 print(f"Loading model and processor: {MODEL_ID}...")
 
-# Re-introduce Quantization config for memory efficiency
-quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float16
-)
-
 # Load processor (handles text tokenization and image processing)
 processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
+processor.tokenizer.pad_token = processor.tokenizer.eos_token  # Set padding token
 
-# Load model with quantization
+# Load model with disk offloading
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    quantization_config=quantization_config, # Use 4-bit quantization
     trust_remote_code=True,
-    device_map="auto" # Automatically distribute model across available GPUs
+    device_map="auto",
+    offload_folder="./offload",  # Specify directory for offloaded weights
+    use_safetensors=True,        # Use safetensors if available
+    torch_dtype=torch.bfloat16   # Match automatic precision conversion
 )
 print("Model and processor loaded.")
 
@@ -83,8 +80,8 @@ def preprocess_data(examples):
             # Qwen-VL format might involve specific roles or tags. Consulting model card is best.
             # Simple approach: Combine prompt and transcription for training label.
             # The processor needs text input structured correctly. Let's try a basic query format.
-            query = processor.tokenizer.from_list_format([
-                {'image': img_path}, # The processor should convert this path to an image token
+            query = processor.from_list_format([
+                {'image': img_path}, # The processor handles image token conversion
                 {'text': f"{prompt}\nAnswer:"}
             ])
             # The label should be the expected transcription
