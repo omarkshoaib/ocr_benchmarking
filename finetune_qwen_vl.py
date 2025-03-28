@@ -42,22 +42,29 @@ print(f"Dataset loaded: {raw_datasets}")
 # --- Load Model and Processor ---
 print(f"Loading model and processor: {MODEL_ID}...")
 
-# Re-introduce Quantization config for memory efficiency
+# Re-introduce Quantization config for memory efficiency with CPU offloading
 quantization_config = BitsAndBytesConfig(
     load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float16
+    bnb_4bit_compute_dtype=torch.float16,
+    llm_int8_enable_fp32_cpu_offload=True  # Enable CPU offloading
 )
+
+# Define a custom device map
+device_map = {
+    "transformer": "cuda:0",  # Load transformer layers on GPU
+    "lm_head": "cpu"          # Load language model head on CPU
+}
 
 # Load processor (handles text tokenization and image processing)
 processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
 processor.tokenizer.pad_token = processor.tokenizer.eot_token  # Set padding token
 
-# Load model with disk offloading
+# Load model with CPU offloading
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    quantization_config=quantization_config, # Use 4-bit quantization
+    quantization_config=quantization_config,
     trust_remote_code=True,
-    device_map="auto" # Automatically distribute model across available GPUs, No CPU offloading for now
+    device_map=device_map
 )
 print("Model and processor loaded.")
 
