@@ -12,7 +12,7 @@ import os
 from PIL import Image
 
 # --- Configuration ---
-MODEL_ID = "Qwen/Qwen-VL-Chat" # Or specific Qwen2-VL model if available
+MODEL_ID = "Qwen/Qwen-VL-Chat-Int4" # Use pre-quantized Int4 model
 DATASET_PATH = "." # Directory containing train.json and val.json
 OUTPUT_DIR = "./qwen_vl_khatt_finetuned"
 LORA_RANK = 8
@@ -42,22 +42,17 @@ print(f"Dataset loaded: {raw_datasets}")
 # --- Load Model and Processor ---
 print(f"Loading model and processor: {MODEL_ID}...")
 
-# Quantization config for memory efficiency (optional, requires bitsandbytes)
-quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float16
-)
+# No explicit BitsAndBytesConfig needed for pre-quantized Int4 model
 
 # Load processor (handles text tokenization and image processing)
 processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True)
 
-# Load model with quantization
+# Load pre-quantized Int4 model
+# It should handle device mapping automatically if enough VRAM, otherwise might need manual map
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    quantization_config=quantization_config,
     trust_remote_code=True,
-    device_map="auto", # Automatically distribute model across available GPUs
-    llm_int8_enable_fp32_cpu_offload=True # Enable CPU offloading for quantized parts
+    device_map="auto" # Automatically distribute model across available GPUs
 )
 print("Model and processor loaded.")
 
