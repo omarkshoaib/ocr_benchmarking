@@ -56,7 +56,8 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     quantization_config=quantization_config,
     trust_remote_code=True,
-    device_map="auto" # Automatically distribute model across available GPUs
+    device_map="auto", # Automatically distribute model across available GPUs
+    llm_int8_enable_fp32_cpu_offload=True # Enable CPU offloading for quantized parts
 )
 print("Model and processor loaded.")
 
